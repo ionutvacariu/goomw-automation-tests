@@ -1,0 +1,106 @@
+plugins {
+
+    id 'java'
+    id 'groovy'
+    id "com.energizedwork.webdriver-binaries" version "1.4"
+    id "com.energizedwork.idea-base" version "1.2"
+    id "io.qameta.allure" version "2.8.1"
+}
+
+ext {
+    drivers = ["chrome", "chromeHeadless"]
+
+    ext {
+        groovyVersion = '2.4.12'
+        gebVersion = '2.0'
+        seleniumVersion = '3.6.0'
+        chromeDriverVersion = '2.41'
+        geckoDriverVersion = '0.18.0'
+
+    }
+}
+
+
+repositories {
+    mavenCentral()
+    maven {
+        url "https://plugins.gradle.org/m2/"
+    }
+}
+
+dependencies {
+    // https://mvnrepository.com/artifact/org.codehaus.groovy/groovy-all
+    compile group: 'org.codehaus.groovy', name: 'groovy-all', version: '2.4.4'
+// https://mvnrepository.com/artifact/javax.xml.bind/jaxb-api
+    compile group: 'javax.xml.bind', name: 'jaxb-api', version: '2.2.4'
+    testCompile 'junit:junit:4.12'
+    testCompile "org.gebish:geb-spock:$gebVersion"
+    testCompile "org.spockframework:spock-core:1.1-groovy-2.4"
+    testCompile "org.codehaus.groovy:groovy-all:2.4.4"
+
+    compile 'org.slf4j:slf4j-jdk14:1.7.25'
+    testCompile "org.gebish:geb-junit4:$gebVersion"
+    compile "org.seleniumhq.selenium:selenium-support:$seleniumVersion"
+    testCompile "org.seleniumhq.selenium:selenium-chrome-driver:$seleniumVersion"
+    testCompile "io.qameta.allure:allure-gradle:2.8.1"
+    testCompile "io.github.bonigarcia:webdrivermanager:3.0.0"
+}
+
+allure {
+    autoconfigure = true
+    version = '2.11.0'
+    autoconfigure = true
+    aspectjweaver = true
+}
+
+task copyDocs(type: Copy) {
+    from('src/test/resources/config/') {
+        include '**/*.json'
+    }
+    into 'build/allure-results'
+}
+
+task copyConfigs(type: Copy) {
+    description 'Copy rconfig file '
+    from('src/test/resources/config/') {
+        include '**/*.*'
+    }
+    into 'build/allure-results/'
+    eachFile { println it.name }
+}
+
+webdriverBinaries {
+    chromedriver chromeDriverVersion
+    geckodriver geckoDriverVersion
+}
+
+drivers.each { driver ->
+    task "${driver}Test"(type: Test) {
+        group JavaBasePlugin.VERIFICATION_GROUP
+        outputs.upToDateWhen { false }
+
+        systemProperty "geb.build.reportsDir", reporting.file("geb/$name")
+        systemProperty "geb.env", driver
+        systemProperties System.properties
+    }
+}
+
+test {
+    dependsOn drivers.collect { tasks["${it}Test"] }
+    enabled = false
+    filter {
+        includeTestsMatching 'com.tfs.features.loyalty.TS1_Loyalty.groovy'
+    }
+}
+
+tasks.withType(Test) {
+    maxHeapSize = "1g"
+    jvmArgs '-XX:MaxMetaspaceSize=128m'
+    testLogging {
+        exceptionFormat = 'full'
+    }
+}
+
+tasks.withType(GroovyCompile) {
+    groovyOptions.forkOptions.memoryMaximumSize = '256m'
+}
